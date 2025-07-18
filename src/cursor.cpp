@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <chrono>
 #include <hyprcursor/hyprcursor.hpp>
 #include <hyprlang.hpp>
 #include <gbm.h>
@@ -145,6 +146,53 @@ void CDynamicCursors::renderSoftware(CPointerManager* pointers, SP<CMonitor> pMo
 
     g_pHyprRenderer->m_renderPass.add(makeShared<CCursorPassElement>(data));
 
+    // Render tail positions
+    for (const auto& tailPos : tailPositions) {
+        if (tailPos.alpha <= 0.01) continue; // Skip very transparent positions
+        
+        auto tailBox = box.copy();
+        tailBox.x = tailPos.position.x;
+        tailBox.y = tailPos.position.y;
+        tailBox.translate(-pointers->m_currentCursorImage.hotspot);
+        
+        if (zoom > 1) {
+            tailBox.x += pointers->m_currentCursorImage.hotspot.x;
+            tailBox.y += pointers->m_currentCursorImage.hotspot.y;
+            
+            auto high = highres.getTexture();
+            if (high) {
+                auto buf = highres.getBuffer();
+                tailBox.x -= (buf->m_hotspot.x / buf->size.x) * pointers->m_currentCursorImage.size.x * zoom;
+                tailBox.y -= (buf->m_hotspot.y / buf->size.y) * pointers->m_currentCursorImage.size.y * zoom;
+            } else {
+                tailBox.x -= pointers->m_currentCursorImage.hotspot.x * zoom;
+                tailBox.y -= pointers->m_currentCursorImage.hotspot.y * zoom;
+            }
+        }
+        
+        tailBox.w *= zoom;
+        tailBox.h *= zoom;
+        
+        if (tailBox.intersection(CBox{{}, {pMonitor->m_size}}).empty())
+            continue;
+            
+        tailBox.scale(pMonitor->m_scale);
+        tailBox.x = std::round(tailBox.x);
+        tailBox.y = std::round(tailBox.y);
+        tailBox.rot = resultShown.rotation;
+        
+        CCursorPassElement::SRenderData tailData;
+        tailData.tex = texture;
+        tailData.box = tailBox;
+        tailData.hotspot = pointers->m_currentCursorImage.hotspot * state->monitor->m_scale * zoom;
+        tailData.nearest = nearest;
+        tailData.stretchAngle = resultShown.stretch.angle;
+        tailData.stretchMagnitude = resultShown.stretch.magnitude;
+        tailData.alpha = tailPos.alpha; // Use tail alpha
+        
+        g_pHyprRenderer->m_renderPass.add(makeShared<CCursorPassElement>(tailData));
+    }
+
     if (pointers->m_currentCursorImage.surface)
             pointers->m_currentCursorImage.surface->resource()->frame(now);
 }
@@ -161,9 +209,27 @@ void CDynamicCursors::damageSoftware(CPointerManager* pointers) {
     int diagonal = size.size();
     Vector2D padding = {diagonal, diagonal};
 
+    static auto PNOHW = CConfigValue<Hyprlang::INT>("cursor:no_hardware_cursors");
+
     CBox b = CBox{pointers->m_pointerPos, size + (padding * 2)}.translate(-(pointers->m_currentCursorImage.hotspot * zoom + padding));
 
-    static auto PNOHW = CConfigValue<Hyprlang::INT>("cursor:no_hardware_cursors");
+    // Damage area for tail positions as well
+    for (const auto& tailPos : tailPositions) {
+        if (tailPos.alpha <= 0.01) continue;
+        
+        CBox tailBox = CBox{tailPos.position, size + (padding * 2)}.translate(-(pointers->m_currentCursorImage.hotspot * zoom + padding));
+        
+        // Damage each tail position individually
+        for (auto& mw : pointers->m_monitorStates) {
+            if (mw->monitor.expired())
+                continue;
+
+            if ((mw->softwareLocks > 0 || mw->hardwareFailed || *PNOHW) && tailBox.overlaps({mw->monitor->m_position, mw->monitor->m_size})) {
+                g_pHyprRenderer->damageBox(tailBox, mw->monitor->shouldSkipScheduleFrameOnMouseEvent());
+                break;
+            }
+        }
+    }
 
     for (auto& mw : pointers->m_monitorStates) {
         if (mw->monitor.expired())
@@ -375,6 +441,32 @@ void CDynamicCursors::onCursorMoved(CPointerManager* pointers) {
         if (**PSHAKE) shake.warp(lastPos, pointers->m_pointerPos);
     }
 
+    // Update tail positions
+    const auto now = std::chrono::steady_clock::now();
+    
+    // Add current position to tail
+    STailPosition newPos;
+    newPos.position = pointers->m_pointerPos;
+    newPos.timestamp = now;
+    newPos.alpha = 1.0;
+    
+    tailPositions.push_back(newPos);
+    
+    // Remove old positions and update alpha values
+    auto it = tailPositions.begin();
+    while (it != tailPositions.end()) {
+        auto age = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->timestamp).count();
+        
+        if (age > static_cast<long>(TAIL_DELAY_MS * MAX_TAIL_LENGTH)) {
+            it = tailPositions.erase(it);
+        } else {
+            // Calculate alpha based on age
+            int tailIndex = age / TAIL_DELAY_MS;
+            it->alpha = std::pow(TAIL_ALPHA_DECAY, tailIndex);
+            ++it;
+        }
+    }
+
     calculate(MOVE);
 
     isMove = false;
@@ -409,6 +501,7 @@ IMode* CDynamicCursors::currentMode() {
     if (mode == "rotate") return &rotate;
     else if (mode == "tilt") return &tilt;
     else if (mode == "stretch") return &stretch;
+    else if (mode == "tails") return &tails;
     else return nullptr;
 }
 

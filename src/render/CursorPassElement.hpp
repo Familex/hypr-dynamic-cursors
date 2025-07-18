@@ -18,6 +18,7 @@ class CCursorPassElement : public IPassElement {
         bool nearest;
         double stretchAngle;
         Vector2D stretchMagnitude;
+        double alpha = 1.0; // Alpha value for transparency
     };
 
     CCursorPassElement(const SRenderData& data);
