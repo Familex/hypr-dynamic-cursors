@@ -213,10 +213,18 @@ void CDynamicCursors::damageSoftware(CPointerManager* pointers) {
 
     CBox b = CBox{pointers->m_pointerPos, size + (padding * 2)}.translate(-(pointers->m_currentCursorImage.hotspot * zoom + padding));
 
+    for (auto& mw : pointers->m_monitorStates) {
+        if (mw->monitor.expired())
+            continue;
+
+        if ((mw->softwareLocks > 0 || mw->hardwareFailed || *PNOHW) && b.overlaps({mw->monitor->m_position, mw->monitor->m_size})) {
+            g_pHyprRenderer->damageBox(b, mw->monitor->shouldSkipScheduleFrameOnMouseEvent());
+            break;
+        }
+    }
+
     // Damage area for trail positions as well
     for (const auto& trailPos : trailPositions) {
-        if (trailPos.alpha <= 0.01) continue;
-        
         CBox tailBox = CBox{trailPos.position, size + (padding * 2)}.translate(-(pointers->m_currentCursorImage.hotspot * zoom + padding));
         
         // Damage each tail position individually
@@ -228,16 +236,6 @@ void CDynamicCursors::damageSoftware(CPointerManager* pointers) {
                 g_pHyprRenderer->damageBox(tailBox, mw->monitor->shouldSkipScheduleFrameOnMouseEvent());
                 break;
             }
-        }
-    }
-
-    for (auto& mw : pointers->m_monitorStates) {
-        if (mw->monitor.expired())
-            continue;
-
-        if ((mw->softwareLocks > 0 || mw->hardwareFailed || *PNOHW) && b.overlaps({mw->monitor->m_position, mw->monitor->m_size})) {
-            g_pHyprRenderer->damageBox(b, mw->monitor->shouldSkipScheduleFrameOnMouseEvent());
-            break;
         }
     }
 }
