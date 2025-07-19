@@ -2,7 +2,7 @@
 
 #include "Mode.hpp"
 
-class CModeTails : public IMode {
+class CModeTrail : public IMode {
   public:
     EModeUpdate strategy() override;
     SModeResult update(Vector2D pos) override;

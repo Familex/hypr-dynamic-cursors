@@ -22,7 +22,7 @@ This mode tries recreating the stretching and squishing that is done to moving o
 
 https://github.com/VirtCode/hypr-dynamic-cursors/assets/41426325/7b8289e7-9dd2-4b57-b406-4fa28779a260
 
-#### `tails`
+#### `trail`
 This mode creates a trail of fading cursor copies that follow your mouse movement. The trail consists of up to 70 positions with decreasing transparency, creating a smooth trailing effect. The tail positions are updated every 30ms and fade out over time.
 
 ### shake to find
@@ -40,7 +40,6 @@ This plugin is still very early in its development. There are also multiple thin
 - [ ] pendulum simulation
 - [X] per-shape length and starting angle (if possible)
 - [X] cursor shake to find
-- [X] cursor tails
 - [X] overdue refactoring (wait for aquamarine merge)
 - [X] hyprcursor magnified shape
 
@@ -105,7 +104,7 @@ plugin:dynamic-cursors {
     # tilt    - tilt the cursor based on x-velocity
     # rotate  - rotate the cursor based on movement direction
     # stretch - stretch the cursor shape based on direction and velocity
-    # tails   - create a trail of fading cursor copies
+    # trail   - create a trail of fading cursor copies
     # none    - do not change the cursors behaviour
     mode = tilt
 

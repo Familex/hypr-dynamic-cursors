@@ -11,7 +11,7 @@
 #include "mode/ModeRotate.hpp"
 #include "mode/ModeTilt.hpp"
 #include "mode/ModeStretch.hpp"
-#include "mode/ModeTails.hpp"
+#include "mode/ModeTrail.hpp"
 #include "other/Shake.hpp"
 #include "highres.hpp"
 
@@ -66,7 +66,7 @@ class CDynamicCursors {
     CModeRotate rotate;
     CModeTilt tilt;
     CModeStretch stretch;
-    CModeTails tails;
+    CModeTrail trail;
 
     /* returns the current mode, nullptr if none is selected */
     IMode* currentMode();
