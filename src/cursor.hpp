@@ -11,7 +11,6 @@
 #include "mode/ModeRotate.hpp"
 #include "mode/ModeTilt.hpp"
 #include "mode/ModeStretch.hpp"
-#include "mode/ModeTrail.hpp"
 #include "other/Shake.hpp"
 #include "highres.hpp"
 
@@ -66,7 +65,6 @@ class CDynamicCursors {
     CModeRotate rotate;
     CModeTilt tilt;
     CModeStretch stretch;
-    CModeTrail trail;
 
     /* returns the current mode, nullptr if none is selected */
     IMode* currentMode();
@@ -81,17 +79,15 @@ class CDynamicCursors {
     // calculates the current angle of the cursor, and changes the cursor shape
     void calculate(EModeUpdate type);
 
-    // cursor tail functionality
-    struct STailPosition {
+    // cursor trail functionality
+    struct STrailPosition {
         Vector2D position;
-        std::chrono::steady_clock::time_point timestamp;
-        double alpha;
+        std::chrono::steady_clock::time_point timestamp; // FIXME use Hyprland analog
+        double alpha = 0.0;
+        SP<CTexture> texture; // store the cursor texture at the time of the trail
     };
 
-    std::vector<STailPosition> tailPositions;
-    static constexpr size_t MAX_TAIL_LENGTH = 10;
-    static constexpr int TAIL_DELAY_MS = 16; // ~60fps delay between tail positions
-    static constexpr double TAIL_ALPHA_DECAY = 0.85; // alpha multiplier for each tail position
+    std::vector<STrailPosition> trailPositions;
 };
 
 inline UP<CDynamicCursors> g_pDynamicCursors;

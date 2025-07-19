@@ -146,51 +146,51 @@ void CDynamicCursors::renderSoftware(CPointerManager* pointers, SP<CMonitor> pMo
 
     g_pHyprRenderer->m_renderPass.add(makeShared<CCursorPassElement>(data));
 
-    // Render tail positions
-    for (const auto& tailPos : tailPositions) {
-        if (tailPos.alpha <= 0.01) continue; // Skip very transparent positions
+    // Render trail positions
+    for (const auto& trailPos : trailPositions) {
+        if (trailPos.alpha <= 0.01) continue; // Skip very transparent positions
         
-        auto tailBox = box.copy();
-        tailBox.x = tailPos.position.x;
-        tailBox.y = tailPos.position.y;
-        tailBox.translate(-pointers->m_currentCursorImage.hotspot);
+        auto trailBox = box.copy();
+        trailBox.x = trailPos.position.x;
+        trailBox.y = trailPos.position.y;
+        trailBox.translate(-pointers->m_currentCursorImage.hotspot);
         
         if (zoom > 1) {
-            tailBox.x += pointers->m_currentCursorImage.hotspot.x;
-            tailBox.y += pointers->m_currentCursorImage.hotspot.y;
+            trailBox.x += pointers->m_currentCursorImage.hotspot.x;
+            trailBox.y += pointers->m_currentCursorImage.hotspot.y;
             
             auto high = highres.getTexture();
             if (high) {
                 auto buf = highres.getBuffer();
-                tailBox.x -= (buf->m_hotspot.x / buf->size.x) * pointers->m_currentCursorImage.size.x * zoom;
-                tailBox.y -= (buf->m_hotspot.y / buf->size.y) * pointers->m_currentCursorImage.size.y * zoom;
+                trailBox.x -= (buf->m_hotspot.x / buf->size.x) * pointers->m_currentCursorImage.size.x * zoom;
+                trailBox.y -= (buf->m_hotspot.y / buf->size.y) * pointers->m_currentCursorImage.size.y * zoom;
             } else {
-                tailBox.x -= pointers->m_currentCursorImage.hotspot.x * zoom;
-                tailBox.y -= pointers->m_currentCursorImage.hotspot.y * zoom;
+                trailBox.x -= pointers->m_currentCursorImage.hotspot.x * zoom;
+                trailBox.y -= pointers->m_currentCursorImage.hotspot.y * zoom;
             }
         }
         
-        tailBox.w *= zoom;
-        tailBox.h *= zoom;
+        trailBox.w *= zoom;
+        trailBox.h *= zoom;
         
-        if (tailBox.intersection(CBox{{}, {pMonitor->m_size}}).empty())
+        if (trailBox.intersection(CBox{{}, {pMonitor->m_size}}).empty())
             continue;
             
-        tailBox.scale(pMonitor->m_scale);
-        tailBox.x = std::round(tailBox.x);
-        tailBox.y = std::round(tailBox.y);
-        tailBox.rot = resultShown.rotation;
+        trailBox.scale(pMonitor->m_scale);
+        trailBox.x = std::round(trailBox.x);
+        trailBox.y = std::round(trailBox.y);
+        trailBox.rot = resultShown.rotation;
         
-        CCursorPassElement::SRenderData tailData;
-        tailData.tex = texture;
-        tailData.box = tailBox;
-        tailData.hotspot = pointers->m_currentCursorImage.hotspot * state->monitor->m_scale * zoom;
-        tailData.nearest = nearest;
-        tailData.stretchAngle = resultShown.stretch.angle;
-        tailData.stretchMagnitude = resultShown.stretch.magnitude;
-        tailData.alpha = tailPos.alpha; // Use tail alpha
+        CCursorPassElement::SRenderData trailData;
+        trailData.tex = trailPos.texture ? trailPos.texture : texture;
+        trailData.box = trailBox;
+        trailData.hotspot = pointers->m_currentCursorImage.hotspot * state->monitor->m_scale * zoom;
+        trailData.nearest = nearest;
+        trailData.stretchAngle = resultShown.stretch.angle;
+        trailData.stretchMagnitude = resultShown.stretch.magnitude;
+        trailData.alpha = trailPos.alpha; // Use trail alpha
         
-        g_pHyprRenderer->m_renderPass.add(makeShared<CCursorPassElement>(tailData));
+        g_pHyprRenderer->m_renderPass.add(makeShared<CCursorPassElement>(trailData));
     }
 
     if (pointers->m_currentCursorImage.surface)
@@ -213,11 +213,11 @@ void CDynamicCursors::damageSoftware(CPointerManager* pointers) {
 
     CBox b = CBox{pointers->m_pointerPos, size + (padding * 2)}.translate(-(pointers->m_currentCursorImage.hotspot * zoom + padding));
 
-    // Damage area for tail positions as well
-    for (const auto& tailPos : tailPositions) {
-        if (tailPos.alpha <= 0.01) continue;
+    // Damage area for trail positions as well
+    for (const auto& trailPos : trailPositions) {
+        if (trailPos.alpha <= 0.01) continue;
         
-        CBox tailBox = CBox{tailPos.position, size + (padding * 2)}.translate(-(pointers->m_currentCursorImage.hotspot * zoom + padding));
+        CBox tailBox = CBox{trailPos.position, size + (padding * 2)}.translate(-(pointers->m_currentCursorImage.hotspot * zoom + padding));
         
         // Damage each tail position individually
         for (auto& mw : pointers->m_monitorStates) {
@@ -393,6 +393,10 @@ Handles cursor move events.
 void CDynamicCursors::onCursorMoved(CPointerManager* pointers) {
     static auto* const* PSHAKE = (Hyprlang::INT* const*) getConfig(CONFIG_SHAKE);
     static auto* const* PIGNORE_WARPS = (Hyprlang::INT* const*) getConfig(CONFIG_IGNORE_WARPS);
+    static auto* const* PTRAIL_ENABLED = (Hyprlang::INT* const*) getConfig(CONFIG_TRAIL_ENABLED);
+    static auto* const* PTRAIL_MAXTRAILS = (Hyprlang::INT* const*) getConfig(CONFIG_TRAIL_MAXTRAILS);
+    static auto* const* PTRAIL_DELAYMS = (Hyprlang::INT* const*) getConfig(CONFIG_TRAIL_DELAYMS);
+    static auto* const* PTRAIL_ALPHADECAY = (Hyprlang::FLOAT* const*) getConfig(CONFIG_TRAIL_ALPHADECAY);
 
     if (!pointers->hasCursor())
         return;
@@ -444,25 +448,27 @@ void CDynamicCursors::onCursorMoved(CPointerManager* pointers) {
     // Update tail positions
     const auto now = std::chrono::steady_clock::now();
     
-    // Add current position to tail
-    STailPosition newPos;
-    newPos.position = pointers->m_pointerPos;
-    newPos.timestamp = now;
-    newPos.alpha = 1.0;
+    // Add current position to trail
+    if (**PTRAIL_ENABLED) {
+      STrailPosition newPos;
+      newPos.position = pointers->m_pointerPos;
+      newPos.timestamp = now;
+      newPos.alpha = 1.0;
+      newPos.texture = pointers->getCurrentCursorTexture();
+      trailPositions.push_back(newPos);
+    }
     
-    tailPositions.push_back(newPos);
-    
-    // Remove old positions and update alpha values
-    auto it = tailPositions.begin();
-    while (it != tailPositions.end()) {
+    // Remove old positions and update alpha values (even if )
+    auto it = trailPositions.begin();
+    while (it != trailPositions.end()) {
         auto age = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->timestamp).count();
         
-        if (age > static_cast<long>(TAIL_DELAY_MS * MAX_TAIL_LENGTH)) {
-            it = tailPositions.erase(it);
+        if (age > static_cast<long>(**PTRAIL_DELAYMS * **PTRAIL_MAXTRAILS)) {
+            it = trailPositions.erase(it);
         } else {
             // Calculate alpha based on age
-            int tailIndex = age / TAIL_DELAY_MS;
-            it->alpha = std::pow(TAIL_ALPHA_DECAY, tailIndex);
+            int tailIndex = age / **PTRAIL_DELAYMS;
+            it->alpha = std::pow(**PTRAIL_ALPHADECAY, tailIndex);
             ++it;
         }
     }
@@ -501,7 +507,6 @@ IMode* CDynamicCursors::currentMode() {
     if (mode == "rotate") return &rotate;
     else if (mode == "tilt") return &tilt;
     else if (mode == "stretch") return &stretch;
-    else if (mode == "trail") return &trail;
     else return nullptr;
 }
 

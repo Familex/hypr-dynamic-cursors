@@ -42,6 +42,11 @@
 
 #define CONFIG_DISPATCHER_MAGNIFY "magnify"
 
+#define CONFIG_TRAIL_ENABLED      "trail:enabled"
+#define CONFIG_TRAIL_MAXTRAILS    "trail:max_trails"
+#define CONFIG_TRAIL_DELAYMS      "trail:delay_ms"
+#define CONFIG_TRAIL_ALPHADECAY   "trail:alpha_decay"
+
 /* is the plugin enabled */
 bool isEnabled();
 

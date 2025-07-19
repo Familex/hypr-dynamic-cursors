@@ -145,6 +145,11 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     addConfig(CONFIG_HW_DEBUG, false);
     addConfig(CONFIG_IGNORE_WARPS, true);
 
+    addConfig(CONFIG_TRAIL_ENABLED, true);
+    addConfig(CONFIG_TRAIL_MAXTRAILS, 8);
+    addConfig(CONFIG_TRAIL_DELAYMS, 16);
+    addConfig(CONFIG_TRAIL_ALPHADECAY, 0.85f);
+
     addRulesConfig();
     finishConfig();
 
